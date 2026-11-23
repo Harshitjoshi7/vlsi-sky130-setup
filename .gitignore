@@ -2,6 +2,10 @@
 *.log
 vlsi_install.log
 
+# OpenLane runs
+runs/
+examples/**/runs/
+
 # OS
 .DS_Store
 Thumbs.db
