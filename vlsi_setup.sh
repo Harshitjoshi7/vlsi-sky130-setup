@@ -341,12 +341,15 @@ set ngspice_models "$env(PDK_PATH)/libs.tech/ngspice"
 XSCHEMRC_EOF
 ok "~/.xschem/xschemrc → sky130A symbols"
 
-# KLayout
+# KLayout — find the .lyt file dynamically (path varies by PDK version)
 mkdir -p "$HOME/.klayout/tech"
-KLAYOUT_LYT="$PDK_ROOT/sky130A/libs.tech/klayout/sky130A.lyt"
-if [ -f "$KLAYOUT_LYT" ]; then
+KLAYOUT_LYT=$(find "$PDK_ROOT/sky130A/libs.tech/klayout" \
+  -maxdepth 3 -name "*.lyt" 2>/dev/null | head -1)
+if [ -n "$KLAYOUT_LYT" ]; then
   ln -sf "$KLAYOUT_LYT" "$HOME/.klayout/tech/sky130A.lyt" 2>/dev/null || true
-  ok "~/.klayout/tech/sky130A.lyt symlinked"
+  ok "~/.klayout/tech/sky130A.lyt → $KLAYOUT_LYT"
+else
+  warn "KLayout .lyt not found yet — will be linked after PDK install"
 fi
 
 ok "Phase 7 complete"

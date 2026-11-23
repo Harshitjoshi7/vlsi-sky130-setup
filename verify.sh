@@ -113,10 +113,23 @@ else
   fail "~/.bashrc does NOT source ~/.vlsi_env  →  run vlsi_setup.sh again"
 fi
 
-if [ -L "$HOME/.klayout/tech/sky130A.lyt" ] || [ -f "$HOME/.klayout/tech/sky130A.lyt" ]; then
+# KLayout symlink — search dynamically, auto-fix if source exists
+KLAYOUT_DEST="$HOME/.klayout/tech/sky130A.lyt"
+if [ -L "$KLAYOUT_DEST" ] || [ -f "$KLAYOUT_DEST" ]; then
   ok "~/.klayout/tech/sky130A.lyt present"
 else
-  warn "~/.klayout/tech/sky130A.lyt missing (KLayout PDK link)"
+  # Try to find the real .lyt file anywhere in the PDK
+  KLAYOUT_SRC=$(find "$PDK_ROOT/sky130A/libs.tech/klayout" \
+    -maxdepth 3 -name "*.lyt" 2>/dev/null | head -1)
+  if [ -n "$KLAYOUT_SRC" ]; then
+    mkdir -p "$HOME/.klayout/tech"
+    ln -sf "$KLAYOUT_SRC" "$KLAYOUT_DEST" 2>/dev/null
+    ok "~/.klayout/tech/sky130A.lyt — auto-fixed symlink → $KLAYOUT_SRC"
+  else
+    warn "~/.klayout/tech/sky130A.lyt missing
+         Fix: find \$PDK_ROOT/sky130A/libs.tech/klayout -name '*.lyt'
+         then: ln -sf <result> ~/.klayout/tech/sky130A.lyt"
+  fi
 fi
 
 # ================================================================
