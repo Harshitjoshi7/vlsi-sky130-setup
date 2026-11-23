@@ -228,6 +228,9 @@ else
     pipx install .
   fi
 
+  # Pin click<8.2.0 inside openlane venv to prevent cloup/IntEnumChoice crash
+  pipx runpip openlane install "click<8.2.0" -q
+
   ok "OpenLane 2 : $(openlane --version 2>&1 | head -1)"
 fi
 
