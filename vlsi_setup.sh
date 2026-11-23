@@ -2,38 +2,67 @@
 # ================================================================
 #  VLSI Full Setup Script — WSL Ubuntu 24
 #  Tools : Icarus Verilog, GTKWave, Yosys, KLayout, Ngspice,
-#          Magic VLSI, Netgen, Xschem, OpenLane 2 (git/latest),
-#          Logisim Evolution
+#          Magic VLSI, Netgen, Xschem, OpenLane 2, Logisim
 #  PDK   : SkyWater SKY130A via volare
 #
 #  Run   : chmod +x vlsi_setup.sh && ./vlsi_setup.sh
 #  After : source ~/.bashrc
+#
+#  ✅ SAFE TO RE-RUN — skips anything already installed
+#  ✅ IDEMPOTENT     — no errors if run multiple times
+#  ✅ SCHOOL-READY   — works on any fresh or partial install
 # ================================================================
 
-set -e
+# ── NO set -e  (we handle errors per-phase, never abort whole script) ──
 LOGFILE="$HOME/vlsi_install.log"
 exec > >(tee -a "$LOGFILE") 2>&1
+
+# ── Colour helpers ────────────────────────────────────────────
+GREEN="\033[0;32m"; YELLOW="\033[1;33m"; RED="\033[0;31m"; NC="\033[0m"
+ok()   { echo -e "${GREEN}  ✓ $*${NC}"; }
+skip() { echo -e "${YELLOW}  ⟳ $* — already installed, skipping${NC}"; }
+warn() { echo -e "${RED}  ✗ $*${NC}"; }
+phase(){ echo ""; echo "── $* ──────────────────────────────────────────"; }
+
+# ── Helpers ───────────────────────────────────────────────────
+has_cmd() { command -v "$1" &>/dev/null; }
+
+# Clone a git repo OR pull if the directory already exists
+# Usage: git_clone_or_pull <url> <dir>
+git_clone_or_pull() {
+  local url="$1" dir="$2"
+  if [ -d "$dir/.git" ]; then
+    echo "    Existing clone found → git pull"
+    git -C "$dir" pull --ff-only 2>&1 || echo "    (pull skipped — no fast-forward)"
+  elif [ -d "$dir" ]; then
+    warn "$dir exists but is not a git repo — removing and re-cloning"
+    rm -rf "$dir"
+    git clone --depth=1 "$url" "$dir"
+  else
+    git clone --depth=1 "$url" "$dir"
+  fi
+}
+
+# ── Global paths ──────────────────────────────────────────────
+PDK_ROOT="$HOME/pdk"
+TOOLS_SRC="$HOME/vlsi-src"
+mkdir -p "$PDK_ROOT" "$TOOLS_SRC" "$HOME/bin"
 
 echo "========================================================"
 echo "  VLSI Tools + SKY130 PDK — WSL Ubuntu 24 Setup"
 echo "  Log → $LOGFILE"
 echo "========================================================"
 
-# ── Global paths ──────────────────────────────────────────────
-PDK_ROOT="$HOME/pdk"          # SKY130 will live here
-TOOLS_SRC="$HOME/vlsi-src"   # Source build workspace
-mkdir -p "$PDK_ROOT" "$TOOLS_SRC" "$HOME/bin"
-
 # ================================================================
-# PHASE 1 — System dependencies
+# PHASE 1 — System dependencies  (apt is always idempotent)
 # ================================================================
-echo ""
-echo "── PHASE 1 : System dependencies ──────────────────────"
-sudo apt update && sudo apt upgrade -y
+phase "PHASE 1 : System dependencies"
+sudo apt update -qq && sudo apt upgrade -y -qq
 
 sudo apt install -y \
   build-essential git curl wget \
-  python3 python3-pip python3-venv python3-dev \
+  python3 python3-pip python3-venv python3-dev python3-full \
+  pipx \
   tcl tcl-dev tk tk-dev \
   libx11-dev libxext-dev libxft-dev libxrender-dev \
   libxaw7-dev libxmu-dev libxi-dev \
@@ -50,363 +79,310 @@ sudo apt install -y \
   default-jre \
   xdg-utils
 
-echo "✓ Phase 1 complete"
+pipx ensurepath
+export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
+ok "Phase 1 complete"
 
 # ================================================================
 # PHASE 2 — APT-installable tools
 # ================================================================
-echo ""
-echo "── PHASE 2 : APT tools (iverilog, gtkwave, yosys, klayout) ─"
+phase "PHASE 2 : APT tools (iverilog, gtkwave, yosys, klayout)"
 
-sudo apt install -y iverilog
-echo "  ✓ Icarus Verilog : $(iverilog -V 2>&1 | head -1)"
-
-sudo apt install -y gtkwave
-echo "  ✓ GTKWave        : installed"
-
-sudo apt install -y yosys
-echo "  ✓ Yosys          : $(yosys --version 2>&1 | head -1)"
-
-# KLayout — try apt first, fall back to .deb download
-if sudo apt install -y klayout 2>/dev/null; then
-  echo "  ✓ KLayout        : $(klayout -v 2>&1 | head -1)"
+if has_cmd iverilog; then
+  skip "Icarus Verilog $(iverilog -V 2>&1 | head -1)"
 else
-  echo "  klayout not in apt — downloading latest .deb ..."
-  KLAYOUT_DEB=$(curl -s https://api.github.com/repos/KLayout/klayout/releases/latest \
-    | grep "browser_download_url.*amd64.deb" | head -1 \
-    | cut -d '"' -f 4)
-  wget -O /tmp/klayout.deb "$KLAYOUT_DEB"
-  sudo dpkg -i /tmp/klayout.deb || sudo apt-get install -f -y
-  echo "  ✓ KLayout        : installed via .deb"
+  sudo apt install -y iverilog
+  ok "Icarus Verilog : $(iverilog -V 2>&1 | head -1)"
 fi
 
-echo "✓ Phase 2 complete"
-
-# ================================================================
-# PHASE 3a — Ngspice from source  (git clone, always latest)
-# ================================================================
-echo ""
-echo "── PHASE 3a : Ngspice (source build) ───────────────────"
-cd "$TOOLS_SRC"
-
-# ── Strategy: git clone the official repo (always latest stable)
-# ngspice releases are on SourceForge only — no GitHub release API.
-# Git clone is simpler, faster, and version-agnostic.
-# ──────────────────────────────────────────────────────────────
-if [ -d "ngspice" ]; then
-  echo "  Existing ngspice clone found — pulling latest..."
-  cd ngspice
-  git pull --ff-only
+if has_cmd gtkwave; then
+  skip "GTKWave"
 else
-  echo "  Cloning ngspice from GitHub mirror (latest stable)..."
-  git clone --depth=1 https://github.com/ngspice/ngspice.git
-  cd ngspice
+  sudo apt install -y gtkwave
+  ok "GTKWave : installed"
 fi
 
-# Bootstrap autoconf (required for git clone; not needed for tarballs)
-echo "  Running autogen.sh ..."
-./autogen.sh
+if has_cmd yosys; then
+  skip "Yosys $(yosys --version 2>&1 | head -1)"
+else
+  sudo apt install -y yosys
+  ok "Yosys : $(yosys --version 2>&1 | head -1)"
+fi
 
-mkdir -p build_release && cd build_release
-../configure \
-  --with-x --with-readline=yes \
-  --enable-xspice --enable-cider \
-  --disable-debug \
-  CFLAGS="-m64 -O2" LDFLAGS="-m64"
-make -j"$(nproc)"
-sudo make install
-sudo ldconfig
-echo "  ✓ Ngspice : $(ngspice -v 2>&1 | head -1)"
+if has_cmd klayout; then
+  skip "KLayout $(klayout -v 2>&1 | head -1)"
+else
+  if sudo apt install -y klayout 2>/dev/null; then
+    ok "KLayout : $(klayout -v 2>&1 | head -1)"
+  else
+    echo "  klayout not in apt — downloading latest .deb..."
+    KLAYOUT_DEB=$(curl -fsSL https://api.github.com/repos/KLayout/klayout/releases/latest \
+      | grep "browser_download_url.*amd64.deb" | head -1 | cut -d'"' -f4)
+    wget -q -O /tmp/klayout.deb "$KLAYOUT_DEB"
+    sudo dpkg -i /tmp/klayout.deb || sudo apt-get install -f -y
+    ok "KLayout : installed via .deb"
+  fi
+fi
+
+ok "Phase 2 complete"
+
+# ================================================================
+# PHASE 3a — Ngspice from source
+# ================================================================
+phase "PHASE 3a : Ngspice (source build)"
+
+if has_cmd ngspice; then
+  skip "Ngspice : $(ngspice -v 2>&1 | head -1)"
+else
+  cd "$TOOLS_SRC"
+  git_clone_or_pull https://github.com/ngspice/ngspice.git ngspice
+  cd ngspice
+
+  # autogen.sh needed for git clones (not for tarballs)
+  if [ ! -f configure ]; then
+    echo "  Running autogen.sh ..."
+    ./autogen.sh 2>/dev/null || autoreconf -fi
+  fi
+
+  mkdir -p build_release && cd build_release
+  ../configure \
+    --with-x --with-readline=yes \
+    --enable-xspice --enable-cider \
+    --disable-debug \
+    CFLAGS="-m64 -O2" LDFLAGS="-m64"
+  make -j"$(nproc)"
+  sudo make install
+  sudo ldconfig
+  ok "Ngspice : $(ngspice -v 2>&1 | head -1)"
+fi
 
 # ================================================================
 # PHASE 3b — Magic VLSI from source
 # ================================================================
-echo ""
-echo "── PHASE 3b : Magic VLSI (source build) ─────────────────"
-cd "$TOOLS_SRC"
-if [ -d "magic" ]; then
-  echo "  Existing magic clone found — pulling latest..."
-  cd magic && git pull --ff-only
+phase "PHASE 3b : Magic VLSI (source build)"
+
+if has_cmd magic; then
+  skip "Magic : $(magic --version 2>&1 | head -1)"
 else
-  git clone https://github.com/RTimothyEdwards/magic.git && cd magic
+  cd "$TOOLS_SRC"
+  git_clone_or_pull https://github.com/RTimothyEdwards/magic.git magic
+  cd magic
+  ./configure
+  make -j"$(nproc)"
+  sudo make install
+  ok "Magic : $(magic --version 2>&1 | head -1)"
 fi
-./configure
-make -j"$(nproc)"
-sudo make install
-echo "  ✓ Magic   : $(magic --version 2>&1 | head -1)"
 
 # ================================================================
 # PHASE 3c — Netgen from source
 # ================================================================
-echo ""
-echo "── PHASE 3c : Netgen (source build) ─────────────────────"
-cd "$TOOLS_SRC"
-if [ -d "netgen" ]; then
-  echo "  Existing netgen clone found — pulling latest..."
-  cd netgen && git pull --ff-only
+phase "PHASE 3c : Netgen (source build)"
+
+if has_cmd netgen; then
+  skip "Netgen"
 else
-  git clone https://github.com/RTimothyEdwards/netgen.git && cd netgen
+  cd "$TOOLS_SRC"
+  git_clone_or_pull https://github.com/RTimothyEdwards/netgen.git netgen
+  cd netgen
+  ./configure
+  make -j"$(nproc)"
+  sudo make install
+  ok "Netgen : installed"
 fi
-./configure
-make -j"$(nproc)"
-sudo make install
-echo "  ✓ Netgen  : installed"
 
 # ================================================================
 # PHASE 3d — Xschem from source
 # ================================================================
-echo ""
-echo "── PHASE 3d : Xschem (source build) ─────────────────────"
-cd "$TOOLS_SRC"
-if [ -d "xschem" ]; then
-  echo "  Existing xschem clone found — pulling latest..."
-  cd xschem && git pull --ff-only
+phase "PHASE 3d : Xschem (source build)"
+
+if has_cmd xschem; then
+  skip "Xschem : $(xschem --version 2>&1 | head -1)"
 else
-  git clone https://github.com/StefanSchippers/xschem.git && cd xschem
+  cd "$TOOLS_SRC"
+  git_clone_or_pull https://github.com/StefanSchippers/xschem.git xschem
+  cd xschem
+  ./configure
+  make -j"$(nproc)"
+  sudo make install
+  ok "Xschem : $(xschem --version 2>&1 | head -1)"
 fi
-./configure
-make -j"$(nproc)"
-sudo make install
-echo "  ✓ Xschem  : $(xschem --version 2>&1 | head -1)"
 
 # ================================================================
-# PHASE 4a — OpenLane 2  (latest from GitHub)
+# PHASE 4a — OpenLane 2 (latest from GitHub, via pipx)
 # ================================================================
-echo ""
-echo "── PHASE 4a : OpenLane 2 (latest from GitHub) ───────────"
+phase "PHASE 4a : OpenLane 2 (latest from GitHub)"
 
-# Ubuntu 24.04 (PEP 668) blocks system pip — install pipx via apt
-echo "  Installing pipx + python3-full via apt..."
-sudo apt install -y pipx python3-full python3-venv
-pipx ensurepath
-export PATH="$HOME/.local/bin:$PATH"
-
-# Always pull the very latest commit from the main branch
-cd "$TOOLS_SRC"
-if [ -d "openlane2" ]; then
-  echo "  Existing openlane2 clone found — pulling latest..."
-  cd openlane2
-  git pull --ff-only
+if has_cmd openlane; then
+  skip "OpenLane : $(openlane --version 2>&1 | head -1)"
 else
-  echo "  Cloning OpenLane 2 from GitHub..."
-  git clone --depth=1 https://github.com/efabless/openlane2.git
+  cd "$TOOLS_SRC"
+  git_clone_or_pull https://github.com/efabless/openlane2.git openlane2
   cd openlane2
-fi
 
-# Install into an isolated pipx venv (safe on Ubuntu 24.04)
-echo "  Installing OpenLane 2 via pipx..."
-if pipx list 2>/dev/null | grep -q "openlane"; then
-  echo "  OpenLane already in pipx — upgrading..."
-  pipx upgrade openlane
-else
-  pipx install .
-fi
+  if pipx list 2>/dev/null | grep -q "openlane"; then
+    echo "  OpenLane in pipx — upgrading..."
+    pipx upgrade openlane
+  else
+    pipx install .
+  fi
 
-echo "  ✓ OpenLane 2 : $(openlane --version 2>&1 | head -1)"
+  ok "OpenLane 2 : $(openlane --version 2>&1 | head -1)"
+fi
 
 # ================================================================
 # PHASE 4b — Logisim Evolution
 # ================================================================
-echo ""
-echo "── PHASE 4b : Logisim Evolution ────────────────────────"
-LOGISIM_VER="3.9.0"
-wget -O "$HOME/bin/logisim-evolution.jar" \
-  "https://github.com/logisim-evolution/logisim-evolution/releases/download/v${LOGISIM_VER}/logisim-evolution-${LOGISIM_VER}-all.jar"
+phase "PHASE 4b : Logisim Evolution"
 
-cat > "$HOME/bin/logisim" << 'LOGISIM_LAUNCHER'
+LOGISIM_JAR="$HOME/bin/logisim-evolution.jar"
+if [ -f "$LOGISIM_JAR" ] && has_cmd logisim; then
+  skip "Logisim Evolution"
+else
+  LOGISIM_VER="3.9.0"
+  wget -q --show-progress -O "$LOGISIM_JAR" \
+    "https://github.com/logisim-evolution/logisim-evolution/releases/download/v${LOGISIM_VER}/logisim-evolution-${LOGISIM_VER}-all.jar"
+
+  cat > "$HOME/bin/logisim" << 'LOGISIM_LAUNCHER'
 #!/bin/bash
 java -jar "$HOME/bin/logisim-evolution.jar" "$@"
 LOGISIM_LAUNCHER
-chmod +x "$HOME/bin/logisim"
-echo "  ✓ Logisim Evolution $LOGISIM_VER → ~/bin/logisim"
+  chmod +x "$HOME/bin/logisim"
+  ok "Logisim Evolution $LOGISIM_VER → ~/bin/logisim"
+fi
 
-echo "✓ Phase 4 complete"
+ok "Phase 4 complete"
 
 # ================================================================
 # PHASE 5 — SKY130A PDK via volare
 # ================================================================
-echo ""
-echo "── PHASE 5 : SKY130A PDK via volare ─────────────────────"
-# Install volare via pipx (safe on Ubuntu 24.04 — no system pip)
-pipx install volare 2>/dev/null || pipx upgrade volare 2>/dev/null || true
-export PATH="$HOME/.local/bin:$PATH"
-
+phase "PHASE 5 : SKY130A PDK via volare"
 export PDK_ROOT="$HOME/pdk"
 
-echo "  Fetching available SKY130 versions..."
-LATEST_VER=$(volare ls-remote --pdk sky130 --pdk-root "$PDK_ROOT" 2>/dev/null \
-  | grep -v "^#\|^$" | head -1 | awk '{print $1}')
-
-if [ -z "$LATEST_VER" ]; then
-  # Fallback to a known stable hash if network lookup fails
-  LATEST_VER="bdc9412b3e468c102d01b7cf6337be06ec6e9c9a"
-  echo "  Auto-detect failed — using known stable version"
+# Install volare via pipx (safe on Ubuntu 24.04)
+if has_cmd volare; then
+  skip "volare already installed"
+else
+  pipx install volare
 fi
 
-echo "  Enabling SKY130 : $LATEST_VER"
-volare enable --pdk sky130 --pdk-root "$PDK_ROOT" "$LATEST_VER"
+# Check if PDK already installed
+if [ -d "$PDK_ROOT/sky130A/libs.tech" ]; then
+  skip "SKY130A PDK already at $PDK_ROOT/sky130A"
+else
+  echo "  Fetching latest SKY130 version..."
+  LATEST_VER=$(volare ls-remote --pdk sky130 --pdk-root "$PDK_ROOT" 2>/dev/null \
+    | grep -v "^#\|^$" | head -1 | awk '{print $1}')
 
-echo "  ✓ PDK installed at : $PDK_ROOT/sky130A"
-echo "✓ Phase 5 complete"
+  if [ -z "$LATEST_VER" ]; then
+    LATEST_VER="bdc9412b3e468c102d01b7cf6337be06ec6e9c9a"
+    echo "  Auto-detect failed — using known stable version"
+  fi
+
+  echo "  Enabling SKY130A : $LATEST_VER"
+  volare enable --pdk sky130 --pdk-root "$PDK_ROOT" "$LATEST_VER"
+  ok "PDK installed at $PDK_ROOT/sky130A"
+fi
+
+ok "Phase 5 complete"
 
 # ================================================================
-# PHASE 6 — Create ~/.vlsi_env  (the auto-source file)
+# PHASE 6 — ~/.vlsi_env
 # ================================================================
-echo ""
-echo "── PHASE 6 : Creating ~/.vlsi_env ───────────────────────"
+phase "PHASE 6 : Creating ~/.vlsi_env"
 
-# NOTE: single-quote the heredoc delimiter so $vars are written
-#       literally (they expand at shell-source time, not now).
 cat > "$HOME/.vlsi_env" << 'VLSI_ENV_EOF'
 # ================================================================
-#  ~/.vlsi_env  — VLSI Environment + SKY130A Auto-Detection
+#  ~/.vlsi_env  — VLSI Environment + SKY130A
 #  Auto-sourced by ~/.bashrc on every WSL session
-#
-#  PDK structure:
-#    $PDK_ROOT/sky130A/libs.tech/magic/      ← Magic tech files
-#    $PDK_ROOT/sky130A/libs.tech/ngspice/    ← SPICE models
-#    $PDK_ROOT/sky130A/libs.tech/xschem/     ← Xschem symbols
-#    $PDK_ROOT/sky130A/libs.tech/netgen/     ← Netgen LVS setup
-#    $PDK_ROOT/sky130A/libs.tech/klayout/    ← KLayout DRC/LVS
-#    $PDK_ROOT/sky130A/libs.ref/             ← Std-cell libraries
 # ================================================================
 
-# ── PDK Core ──────────────────────────────────────────────────
 export PDK_ROOT="$HOME/pdk"
 export PDK="sky130A"
 export PDK_PATH="$PDK_ROOT/$PDK"
 export STD_CELL_LIBRARY="sky130_fd_sc_hd"
 export PROCESS="sky130"
-
-# ── Magic VLSI ────────────────────────────────────────────────
-# PDKPATH → Magic auto-loads $PDKPATH/sky130A/libs.tech/magic/
-# .magicrc then calls sky130A.magicrc for tech + startup
 export PDKPATH="$PDK_ROOT"
-
-# ── Ngspice ───────────────────────────────────────────────────
-# In your SPICE netlists, include models with:
-#   .lib "$NGSPICE_MODELS" tt        (TT corner)
-#   .lib "$NGSPICE_MODELS" ff        (FF corner)
-#   .lib "$NGSPICE_MODELS" ss        (SS corner)
 export NGSPICE_MODELS="$PDK_PATH/libs.tech/ngspice/sky130.lib.spice"
-
-# ── Xschem ───────────────────────────────────────────────────
-# xschemrc in ~/.xschem/ picks this up for symbol libraries
 export XSCHEM_SKY130="$PDK_PATH/libs.tech/xschem"
-
-# ── KLayout ───────────────────────────────────────────────────
 export KLAYOUT_PATH="$PDK_PATH/libs.tech/klayout:${KLAYOUT_PATH:-}"
-
-# ── Yosys (Liberty file for synthesis) ────────────────────────
 export LIBERTY="$PDK_PATH/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib"
-
-# ── Netgen ────────────────────────────────────────────────────
-# LVS run: netgen -batch source $NETGEN_SETUP
 export NETGEN_SETUP="$PDK_PATH/libs.tech/netgen/sky130A_setup.tcl"
-
-# ── OpenLane 2 ────────────────────────────────────────────────
 export OPENLANE_PDK_ROOT="$PDK_ROOT"
-
-# ── PATH ──────────────────────────────────────────────────────
 export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
 
-# ── Display — WSL2/WSLg ───────────────────────────────────────
-# Windows 11 (WSLg): GUI launches automatically — nothing needed.
-# Windows 10 (VcXsrv): uncomment the two lines below:
+# Windows 11 (WSLg)  → GUI works automatically, nothing needed
+# Windows 10 (VcXsrv) → uncomment:
 # export DISPLAY=$(grep -m1 nameserver /etc/resolv.conf | awk '{print $2}'):0.0
 # export LIBGL_ALWAYS_INDIRECT=1
 
-# ── Confirm ───────────────────────────────────────────────────
 echo "[VLSI] SKY130A loaded → $PDK_PATH"
 VLSI_ENV_EOF
 
-echo "  ✓ ~/.vlsi_env created"
+ok "~/.vlsi_env created"
 
 # ================================================================
-# PHASE 7 — Per-tool SKY130 config files
+# PHASE 7 — Per-tool config files
 # ================================================================
-echo ""
-echo "── PHASE 7 : Per-tool config files ──────────────────────"
+phase "PHASE 7 : Per-tool config files"
 
-# ── Magic : ~/.magicrc ────────────────────────────────────────
+# Magic
 cat > "$HOME/.magicrc" << 'MAGICRC_EOF'
-# Magic VLSI startup — load SKY130A technology
-# Requires PDK_ROOT env var (set in ~/.vlsi_env)
 source $env(PDK_ROOT)/sky130A/libs.tech/magic/sky130A.magicrc
 MAGICRC_EOF
-echo "  ✓ ~/.magicrc         → sky130A.magicrc auto-loaded"
+ok "~/.magicrc → sky130A.magicrc"
 
-# ── Xschem : ~/.xschem/xschemrc ──────────────────────────────
+# Xschem
 mkdir -p "$HOME/.xschem"
 cat > "$HOME/.xschem/xschemrc" << 'XSCHEMRC_EOF'
-# Xschem startup config — SKY130A symbol/model libraries
-# Requires PDK_PATH env var (set in ~/.vlsi_env)
-
-# SKY130 device symbols
 set XSCHEM_LIBRARY_PATH "$env(PDK_PATH)/libs.tech/xschem"
-
-# Your personal symbol library (create if needed)
 set user_lib "$env(HOME)/.xschem/xschem_library"
-if {[file isdirectory $user_lib]} {
-    append XSCHEM_LIBRARY_PATH ":$user_lib"
-}
-
-# SPICE model include (Ngspice)
+if {[file isdirectory $user_lib]} { append XSCHEM_LIBRARY_PATH ":$user_lib" }
 set ngspice_models "$env(PDK_PATH)/libs.tech/ngspice"
 XSCHEMRC_EOF
-echo "  ✓ ~/.xschem/xschemrc → sky130A symbols linked"
+ok "~/.xschem/xschemrc → sky130A symbols"
 
-# ── KLayout : tech file symlink ───────────────────────────────
+# KLayout
 mkdir -p "$HOME/.klayout/tech"
 KLAYOUT_LYT="$PDK_ROOT/sky130A/libs.tech/klayout/sky130A.lyt"
 if [ -f "$KLAYOUT_LYT" ]; then
   ln -sf "$KLAYOUT_LYT" "$HOME/.klayout/tech/sky130A.lyt" 2>/dev/null || true
-  echo "  ✓ ~/.klayout/tech/   → sky130A.lyt symlinked"
+  ok "~/.klayout/tech/sky130A.lyt symlinked"
 fi
 
-echo "✓ Phase 7 complete"
+ok "Phase 7 complete"
 
 # ================================================================
-# PHASE 8 — Add source to ~/.bashrc
+# PHASE 8 — ~/.bashrc
 # ================================================================
-echo ""
-echo "── PHASE 8 : Updating ~/.bashrc ─────────────────────────"
+phase "PHASE 8 : Updating ~/.bashrc"
 
 BASHRC_TAG="# VLSI Tools — SKY130 Auto-Detect"
 if ! grep -qF "$BASHRC_TAG" "$HOME/.bashrc"; then
-  {
-    echo ""
-    echo "$BASHRC_TAG"
-    echo 'source "$HOME/.vlsi_env"'
-  } >> "$HOME/.bashrc"
-  echo "  ✓ Added to ~/.bashrc"
+  { echo ""; echo "$BASHRC_TAG"; echo 'source "$HOME/.vlsi_env"'; } >> "$HOME/.bashrc"
+  ok "Added source line to ~/.bashrc"
 else
-  echo "  ~/.bashrc already has the source line — skipped"
+  skip "~/.bashrc already patched"
 fi
 
 # ================================================================
-# DONE
+# DONE — Summary
 # ================================================================
 echo ""
 echo "========================================================"
-echo "  Setup Complete!"
+echo -e "${GREEN}  ✅  Setup Complete! ${NC}"
 echo "========================================================"
 echo ""
-echo "  NEXT STEPS:"
-echo "  1.  source ~/.bashrc"
+echo "  NEXT STEP :  source ~/.bashrc"
 echo ""
 echo "  QUICK VERIFY:"
-echo "  echo \$PDK_PATH          → $HOME/pdk/sky130A"
-echo "  iverilog -V              → Icarus version"
-echo "  yosys --version          → Yosys version"
-echo "  ngspice -v               → Ngspice version"
-echo "  magic                    → opens with sky130A tech"
-echo "  xschem                   → opens with sky130 symbols"
-echo "  klayout                  → open → File → Technologies"
-echo "  logisim                  → Logisim Evolution GUI"
-echo "  openlane --help          → OpenLane 2 CLI"
+echo "    iverilog -V        → Icarus Verilog"
+echo "    yosys --version    → Yosys"
+echo "    ngspice -v         → Ngspice"
+echo "    magic --version    → Magic VLSI"
+echo "    xschem --version   → Xschem"
+echo "    openlane --help    → OpenLane 2"
+echo "    logisim            → Logisim GUI"
 echo ""
-echo "  PDK location : $PDK_ROOT/sky130A"
-echo "  Source file  : $HOME/.vlsi_env"
-echo "  Log file     : $LOGFILE"
+echo "  PDK  : $PDK_ROOT/sky130A"
+echo "  Log  : $LOGFILE"
 echo ""
