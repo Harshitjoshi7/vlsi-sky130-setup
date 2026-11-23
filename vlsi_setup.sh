@@ -302,7 +302,11 @@ export PDK_PATH="$PDK_ROOT/$PDK"
 export STD_CELL_LIBRARY="sky130_fd_sc_hd"
 export PROCESS="sky130"
 export PDKPATH="$PDK_ROOT"
-export NGSPICE_MODELS="$PDK_PATH/libs.tech/ngspice/sky130.lib.spice"
+
+# Auto-detect actual SPICE model file (path varies by PDK version)
+_NG=$(find "$PDK_PATH/libs.tech/ngspice" -maxdepth 2 -name "*.lib.spice" 2>/dev/null | head -1)
+export NGSPICE_MODELS="${_NG:-$PDK_PATH/libs.tech/ngspice/sky130.lib.spice}"
+
 export XSCHEM_SKY130="$PDK_PATH/libs.tech/xschem"
 export KLAYOUT_PATH="$PDK_PATH/libs.tech/klayout:${KLAYOUT_PATH:-}"
 export LIBERTY="$PDK_PATH/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib"

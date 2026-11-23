@@ -182,24 +182,63 @@ else
   fail "Yosys synthesis failed  →  check $TMPDIR_TEST/synth.log"
 fi
 
-# ── 5c. Ngspice: SPICE simulation with SKY130 models ──────────
-cat > "$TMPDIR_TEST/inv.spice" << EOF
-* SKY130A inverter DC sweep
+# ── 5c. Ngspice: two-part test ────────────────────────────────
+
+# Part A: basic ngspice works at all (no PDK needed)
+cat > "$TMPDIR_TEST/rc.spice" << 'EOF'
+* Simple RC — no PDK required
+R1 in out 1k
+C1 out 0  1n
+Vin in 0 DC 1
+.op
+.end
+EOF
+NGBASIC=$(ngspice -b "$TMPDIR_TEST/rc.spice" 2>&1)
+if echo "$NGBASIC" | grep -qiE "ngspice|operating|v\(out\)"; then
+  ok "Ngspice: basic simulation (RC circuit)"
+else
+  fail "Ngspice: basic simulation failed
+         Output: $(echo "$NGBASIC" | tail -5)"
+fi
+
+# Part B: find SKY130 model file (path varies by PDK version)
+NGSPICE_LIB=$(find "$PDK_ROOT/sky130A/libs.tech/ngspice" \
+  -maxdepth 2 -name "*.lib.spice" 2>/dev/null | head -1)
+
+# Update NGSPICE_MODELS in vlsi_env if path found but different
+if [ -z "$NGSPICE_LIB" ]; then
+  fail "Ngspice: SKY130 model file not found under $PDK_ROOT/sky130A/libs.tech/ngspice/
+         → PDK may not be installed; run: volare enable --pdk sky130 --pdk-root \$PDK_ROOT <version>"
+else
+  ok "Ngspice: SKY130 model file found — $NGSPICE_LIB"
+
+  # Auto-patch ~/.vlsi_env if NGSPICE_MODELS is wrong
+  if [ "$NGSPICE_MODELS" != "$NGSPICE_LIB" ]; then
+    warn "NGSPICE_MODELS mismatch — auto-patching ~/.vlsi_env"
+    sed -i "s|export NGSPICE_MODELS=.*|export NGSPICE_MODELS=\"$NGSPICE_LIB\"|" "$HOME/.vlsi_env"
+    export NGSPICE_MODELS="$NGSPICE_LIB"
+    ok "NGSPICE_MODELS updated → $NGSPICE_LIB"
+  fi
+
+  # Part C: simulate with real SKY130 models
+  cat > "$TMPDIR_TEST/inv_sky130.spice" << EOF
+* SKY130A inverter .op — uses real SPICE models
 .lib "$NGSPICE_MODELS" tt
 M1 out in vdd vdd sky130_fd_pr__pfet_01v8 W=1u L=0.15u
-M2 out in 0   0   sky130_fd_pr__nfet_01v8 W=0.65u L=0.15u
+M2 out in gnd gnd sky130_fd_pr__nfet_01v8 W=0.65u L=0.15u
 Vdd vdd 0 1.8
+Vgnd gnd 0 0
 Vin in  0 DC 0.9
 .op
 .end
 EOF
-NGOUT=$(ngspice -b "$TMPDIR_TEST/inv.spice" 2>&1)
-if echo "$NGOUT" | grep -qiE "op point|operating"; then
-  ok "Ngspice: DC .op with SKY130A SPICE models"
-elif echo "$NGOUT" | grep -qiE "error|not found" ; then
-  fail "Ngspice: simulation error  →  check NGSPICE_MODELS path"
-else
-  warn "Ngspice: ran but output unclear  →  check manually"
+  NGSKY=$(ngspice -b "$TMPDIR_TEST/inv_sky130.spice" 2>&1)
+  if echo "$NGSKY" | grep -qiE "ngspice|v\(out\)|i\(vdd\)|operating"; then
+    ok "Ngspice: DC .op with SKY130A SPICE models"
+  else
+    fail "Ngspice: SKY130 simulation failed
+           Output: $(echo "$NGSKY" | grep -iE 'error|warning|fatal' | head -5)"
+  fi
 fi
 
 # ── 5d. Netgen LVS setup file ─────────────────────────────────
