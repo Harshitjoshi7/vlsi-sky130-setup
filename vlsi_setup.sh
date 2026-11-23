@@ -77,7 +77,8 @@ sudo apt install -y \
   libboost-all-dev libeigen3-dev \
   libgtk-3-dev \
   default-jre \
-  xdg-utils
+  xdg-utils \
+  graphviz xdot
 
 pipx ensurepath
 export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
