@@ -57,10 +57,54 @@ pipx upgrade openlane
 
 ```
 vlsi-sky130-setup/
-├── vlsi_setup.sh      ← Main installer script
-├── README.md          ← This file
+├── vlsi_setup.sh       ← Main installer script (fully idempotent)
+├── verify.sh           ← Comprehensive 30+ health-check test suite
+├── synth_sky130.sh     ← Quick Yosys + SKY130 synthesis & GUI schematic script
+├── run_openlane.sh     ← OpenLane 2 runner (synthesis or full RTL-to-GDS)
+├── examples/
+│   └── and_gate/       ← Ready-to-run AND gate design for OpenLane
+│       ├── config.json
+│       └── src/and_gate.v
+├── README.md           ← Documentation
 └── .gitignore
 ```
+
+---
+
+## 🚀 Running OpenLane 2 (RTL to GDS II)
+
+OpenLane automates the entire ASIC flow from Verilog RTL all the way to tape-out-ready GDS II.
+
+An example `and_gate` design is already included under `examples/and_gate`.
+
+### Option A: Using the helper script
+
+```bash
+# 1. Run Synthesis only
+./run_openlane.sh examples/and_gate --synth
+
+# 2. Run Full RTL to GDS II
+./run_openlane.sh examples/and_gate
+```
+
+### Option B: Using the `openlane` command directly
+
+```bash
+# Full flow (Floorplanning, Placement, CTS, Routing, Signoff)
+openlane examples/and_gate
+
+# Synthesis only (stops right after Yosys)
+openlane examples/and_gate --to Yosys.Synthesis
+```
+
+### Inspecting outputs
+- All flow artifacts are placed in `examples/and_gate/runs/<timestamp_run>/`
+- Synthesized gate-level netlist: `runs/<run>/final/nl/and_gate.nl.v`
+- Final GDS II layout: `runs/<run>/final/gds/and_gate.gds`
+- To view the final chip layout in KLayout:
+  ```bash
+  klayout examples/and_gate/runs/<run_tag>/final/gds/and_gate.gds
+  ```
 
 ---
 
