@@ -36,6 +36,7 @@ sudo apt install -y \
   python3 python3-pip python3-venv python3-dev \
   tcl tcl-dev tk tk-dev \
   libx11-dev libxext-dev libxft-dev libxrender-dev \
+  libxaw7-dev libxmu-dev libxi-dev \
   libxcb1-dev libxcb-render0-dev \
   libglu1-mesa-dev freeglut3-dev mesa-common-dev \
   libcairo2-dev libgsl-dev \
