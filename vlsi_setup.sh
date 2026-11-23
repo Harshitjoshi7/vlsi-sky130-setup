@@ -82,48 +82,31 @@ fi
 echo "✓ Phase 2 complete"
 
 # ================================================================
-# PHASE 3a — Ngspice from source  (GitHub release, auto-latest)
+# PHASE 3a — Ngspice from source  (git clone, always latest)
 # ================================================================
 echo ""
 echo "── PHASE 3a : Ngspice (source build) ───────────────────"
 cd "$TOOLS_SRC"
 
-# ── Auto-detect latest stable Ngspice release from GitHub ─────
-echo "  Fetching latest Ngspice version from GitHub..."
-NGSPICE_TAG=$(curl -fsSL "https://api.github.com/repos/ngspice/ngspice/releases/latest" \
-  | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\(.*\)".*/\1/')
-
-# tag is typically  "ngspice-44"  → strip prefix to get the number
-NGSPICE_VER="${NGSPICE_TAG#ngspice-}"
-
-if [ -z "$NGSPICE_VER" ]; then
-  NGSPICE_VER="44"
-  NGSPICE_TAG="ngspice-44"
-  echo "  GitHub lookup failed — falling back to Ngspice $NGSPICE_VER"
-fi
-echo "  Latest Ngspice : $NGSPICE_TAG  (ver $NGSPICE_VER)"
-
-# ── Download tarball from GitHub releases ─────────────────────
-NGSPICE_URL="https://github.com/ngspice/ngspice/releases/download/${NGSPICE_TAG}/ngspice-${NGSPICE_VER}.tar.gz"
-echo "  Downloading: $NGSPICE_URL"
-wget --show-progress -O ngspice.tar.gz "$NGSPICE_URL" 2>&1
-
-# ── If tarball missing / 404, fall back to git clone ──────────
-if [ ! -s ngspice.tar.gz ]; then
-  echo "  Tarball unavailable — cloning from GitHub (git fallback)..."
-  rm -f ngspice.tar.gz
-  git clone --depth=1 https://github.com/ngspice/ngspice.git "ngspice-${NGSPICE_VER}"
-  cd "ngspice-${NGSPICE_VER}"
-  # Git clone needs autoconf bootstrap
-  ./autogen.sh 2>/dev/null || autoreconf -fi
+# ── Strategy: git clone the official repo (always latest stable)
+# ngspice releases are on SourceForge only — no GitHub release API.
+# Git clone is simpler, faster, and version-agnostic.
+# ──────────────────────────────────────────────────────────────
+if [ -d "ngspice" ]; then
+  echo "  Existing ngspice clone found — pulling latest..."
+  cd ngspice
+  git pull --ff-only
 else
-  tar xzf ngspice.tar.gz
-  # Tarball may extract as  ngspice-44  or  ngspice-ngspice-44  — handle both
-  NGSPICE_DIR=$(tar tzf ngspice.tar.gz 2>/dev/null | head -1 | cut -d/ -f1 || echo "ngspice-${NGSPICE_VER}")
-  cd "${NGSPICE_DIR:-ngspice-${NGSPICE_VER}}"
+  echo "  Cloning ngspice from GitHub mirror (latest stable)..."
+  git clone --depth=1 https://github.com/ngspice/ngspice.git
+  cd ngspice
 fi
 
-mkdir -p release && cd release
+# Bootstrap autoconf (required for git clone; not needed for tarballs)
+echo "  Running autogen.sh ..."
+./autogen.sh
+
+mkdir -p build_release && cd build_release
 ../configure \
   --with-x --with-readline=yes \
   --enable-xspice --enable-cider \
