@@ -78,7 +78,8 @@ sudo apt install -y \
   libgtk-3-dev \
   default-jre \
   xdg-utils \
-  graphviz xdot
+  graphviz xdot \
+  fonts-urw-base35
 
 pipx ensurepath
 export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
