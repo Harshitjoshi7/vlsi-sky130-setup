@@ -1,0 +1,12 @@
+# Logs
+*.log
+vlsi_install.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
+*~
