@@ -61,15 +61,17 @@ sudo apt update -qq && sudo apt upgrade -y -qq
 
 sudo apt install -y \
   build-essential git curl wget \
-  python3 python3-pip python3-venv python3-dev python3-full \
+  python3 python3-pip python3-venv python3-dev python3-full python3-matplotlib \
   pipx \
+  docker.io \
+  m4 \
   tcl tcl-dev tk tk-dev \
-  libx11-dev libxext-dev libxft-dev libxrender-dev \
+  libx11-dev libxext-dev libxft-dev libxrender-dev libxpm-dev \
   libxaw7-dev libxmu-dev libxi-dev \
   libxcb1-dev libxcb-render0-dev \
-  libglu1-mesa-dev freeglut3-dev mesa-common-dev \
+  libgl1-mesa-dev libglu1-mesa-dev freeglut3-dev mesa-common-dev \
   libcairo2-dev libgsl-dev \
-  libreadline-dev libncurses5-dev libncursesw5-dev \
+  libreadline-dev libncurses-dev libncurses5-dev libncursesw5-dev \
   flex bison libfl2 libfl-dev \
   libffi-dev libssl-dev libsuitesparse-dev \
   autoconf automake libtool \
@@ -79,7 +81,16 @@ sudo apt install -y \
   default-jre \
   xdg-utils \
   graphviz xdot \
-  fonts-urw-base35
+  fonts-urw-base35 \
+  csh tcsh \
+  gedit \
+  verilator
+
+# Ensure docker group permissions
+sudo usermod -aG docker "$USER" 2>/dev/null || true
+
+# Install / update matplotlib via pip
+pip3 install --break-system-packages matplotlib 2>/dev/null || true
 
 pipx ensurepath
 export PATH="$HOME/.local/bin:$HOME/bin:$PATH"

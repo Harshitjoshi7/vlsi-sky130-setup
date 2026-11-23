@@ -30,8 +30,21 @@ echo "  Config : $CONFIG"
 echo "  PDK    : $PDK_PATH (using local PDK via --manual-pdk)"
 echo "========================================================"
 
-# Always pass --manual-pdk to prevent re-downloading the PDK
-openlane --manual-pdk "$CONFIG" "$@"
+# In OpenLane 2, --dockerized MUST precede all other options!
+if [[ " $* " =~ " --dockerized " ]] || [ -z "$*" ]; then
+  # Strip --dockerized from extra arguments if passed
+  EXTRA_ARGS=()
+  for arg in "$@"; do
+    if [ "$arg" != "--dockerized" ]; then
+      EXTRA_ARGS+=("$arg")
+    fi
+  done
+  echo "  Engine : Docker container (efabless/openlane2)"
+  openlane --dockerized --manual-pdk "$CONFIG" "${EXTRA_ARGS[@]}"
+else
+  echo "  Engine : Bare-metal local tools"
+  openlane --manual-pdk "$CONFIG" "$@"
+fi
 
 echo ""
 echo "========================================================"
