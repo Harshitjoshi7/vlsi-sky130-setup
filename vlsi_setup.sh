@@ -124,8 +124,12 @@ echo "  ✓ Ngspice : $(ngspice -v 2>&1 | head -1)"
 echo ""
 echo "── PHASE 3b : Magic VLSI (source build) ─────────────────"
 cd "$TOOLS_SRC"
-git clone https://github.com/RTimothyEdwards/magic.git
-cd magic
+if [ -d "magic" ]; then
+  echo "  Existing magic clone found — pulling latest..."
+  cd magic && git pull --ff-only
+else
+  git clone https://github.com/RTimothyEdwards/magic.git && cd magic
+fi
 ./configure
 make -j"$(nproc)"
 sudo make install
@@ -137,8 +141,12 @@ echo "  ✓ Magic   : $(magic --version 2>&1 | head -1)"
 echo ""
 echo "── PHASE 3c : Netgen (source build) ─────────────────────"
 cd "$TOOLS_SRC"
-git clone https://github.com/RTimothyEdwards/netgen.git
-cd netgen
+if [ -d "netgen" ]; then
+  echo "  Existing netgen clone found — pulling latest..."
+  cd netgen && git pull --ff-only
+else
+  git clone https://github.com/RTimothyEdwards/netgen.git && cd netgen
+fi
 ./configure
 make -j"$(nproc)"
 sudo make install
@@ -150,8 +158,12 @@ echo "  ✓ Netgen  : installed"
 echo ""
 echo "── PHASE 3d : Xschem (source build) ─────────────────────"
 cd "$TOOLS_SRC"
-git clone https://github.com/StefanSchippers/xschem.git
-cd xschem
+if [ -d "xschem" ]; then
+  echo "  Existing xschem clone found — pulling latest..."
+  cd xschem && git pull --ff-only
+else
+  git clone https://github.com/StefanSchippers/xschem.git && cd xschem
+fi
 ./configure
 make -j"$(nproc)"
 sudo make install
