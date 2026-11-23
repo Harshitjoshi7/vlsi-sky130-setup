@@ -163,8 +163,9 @@ echo "  ✓ Xschem  : $(xschem --version 2>&1 | head -1)"
 echo ""
 echo "── PHASE 4a : OpenLane 2 (latest from GitHub) ───────────"
 
-# Ensure pipx is available (cleaner isolated install)
-pip3 install --upgrade pip pipx
+# Ubuntu 24.04 (PEP 668) blocks system pip — install pipx via apt
+echo "  Installing pipx + python3-full via apt..."
+sudo apt install -y pipx python3-full python3-venv
 pipx ensurepath
 export PATH="$HOME/.local/bin:$PATH"
 
@@ -180,11 +181,14 @@ else
   cd openlane2
 fi
 
-# Install (or upgrade) into an isolated pipx environment
-echo "  Installing OpenLane 2 via pipx (isolated env)..."
-pipx install --pip-args="--upgrade" . 2>/dev/null \
-  || pipx upgrade openlane 2>/dev/null \
-  || pip3 install --upgrade .
+# Install into an isolated pipx venv (safe on Ubuntu 24.04)
+echo "  Installing OpenLane 2 via pipx..."
+if pipx list 2>/dev/null | grep -q "openlane"; then
+  echo "  OpenLane already in pipx — upgrading..."
+  pipx upgrade openlane
+else
+  pipx install .
+fi
 
 echo "  ✓ OpenLane 2 : $(openlane --version 2>&1 | head -1)"
 
@@ -211,7 +215,9 @@ echo "✓ Phase 4 complete"
 # ================================================================
 echo ""
 echo "── PHASE 5 : SKY130A PDK via volare ─────────────────────"
-pip3 install --upgrade volare
+# Install volare via pipx (safe on Ubuntu 24.04 — no system pip)
+pipx install volare 2>/dev/null || pipx upgrade volare 2>/dev/null || true
+export PATH="$HOME/.local/bin:$PATH"
 
 export PDK_ROOT="$HOME/pdk"
 
