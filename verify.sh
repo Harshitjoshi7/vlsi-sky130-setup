@@ -105,6 +105,7 @@ hdr "4. Per-tool Config Files"
 
 check_path "~/.magicrc"              "$HOME/.magicrc"
 check_path "~/.xschem/xschemrc"     "$HOME/.xschem/xschemrc"
+check_path "Xschem default devices"  "/usr/local/share/xschem/xschem_library/devices/ipin.sym"
 check_path "~/.bashrc vlsi source"  "/dev/null"   # checked differently
 
 if grep -qF "vlsi_env" "$HOME/.bashrc" 2>/dev/null; then
