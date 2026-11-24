@@ -56,13 +56,21 @@ yosys -p "
   # Write output netlist
   write_verilog -noattr ${TOP}_synth.v
 
-  # Show schematic (opens xdot window)
+  # Show schematic (opens xdot window if display available)
   show -format dot -prefix ${TOP}_schematic
 "
 
+# Also render SVG and PNG images of schematic for easy viewing anywhere
+if command -v dot &>/dev/null && [ -f "${TOP}_schematic.dot" ]; then
+  dot -Tsvg "${TOP}_schematic.dot" -o "${TOP}_schematic.svg" 2>/dev/null || true
+  dot -Tpng "${TOP}_schematic.dot" -o "${TOP}_schematic.png" 2>/dev/null || true
+fi
+
 echo ""
 echo "========================================================"
-echo "  Done!"
+echo "  Synthesis Complete!"
 echo "  Netlist   → ${TOP}_synth.v"
-echo "  Schematic → ${TOP}_schematic.dot  (open with: xdot ${TOP}_schematic.dot)"
+echo "  Schematic → ${TOP}_schematic.dot"
+[ -f "${TOP}_schematic.svg" ] && echo "  SVG Image → ${TOP}_schematic.svg  (open in browser/Windows)"
+[ -f "${TOP}_schematic.png" ] && echo "  PNG Image → ${TOP}_schematic.png"
 echo "========================================================"

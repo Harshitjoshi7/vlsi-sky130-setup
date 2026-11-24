@@ -7,38 +7,44 @@
 ## ⚡ Quick Install (any PC)
 
 ```bash
-# 1. Clone the repo
+# 1. Clone the repo in WSL Ubuntu
 git clone https://github.com/Harshitjoshi7/vlsi-sky130-setup.git
 cd vlsi-sky130-setup
 
-# 2. Make executable & run
-chmod +x vlsi_setup.sh
+# 2. Ensure Unix line endings & make executable
+sed -i -e 's/\r$//' *.sh 2>/dev/null || true
+chmod +x *.sh
+
+# 3. Run the installer
 ./vlsi_setup.sh
 
-# 3. Reload environment
+# 4. Reload your environment
 source ~/.bashrc
 ```
 
-> **Requires:** WSL 2 with Ubuntu 24.04 installed on Windows.  
-> The script logs everything to `~/vlsi_install.log`.
+> **Requires:** WSL 2 with Ubuntu (22.04 or 24.04) on Windows 10/11.  
+> The script is **100% idempotent** (safe to re-run anytime; skips what's already installed).  
+> Detailed installation logs are written to `~/vlsi_install.log`.
 
 ---
 
-## 🛠️ Tools Installed
+## 🛠️ Tools Installed & Configured
 
-| Tool | Version | Method |
-|------|---------|--------|
-| **Icarus Verilog** | Latest APT | `apt` |
-| **GTKWave** | Latest APT | `apt` |
-| **Yosys** | Latest APT | `apt` |
-| **KLayout** | Latest | `apt` → `.deb` fallback |
-| **Ngspice** | 43 | Built from source |
-| **Magic VLSI** | Latest | Built from source (GitHub) |
-| **Netgen** | Latest | Built from source (GitHub) |
-| **Xschem** | Latest | Built from source (GitHub) |
-| **OpenLane 2** | ⭐ Latest (HEAD) | Cloned from GitHub + `pipx` |
-| **Logisim Evolution** | 3.9.0 | JAR download |
-| **SKY130A PDK** | Latest | `volare` |
+| Tool | Version / Source | Purpose |
+|------|------------------|---------|
+| **Icarus Verilog** (`iverilog`) | Latest APT | Verilog IEEE-1364 simulation |
+| **GTKWave** (`gtkwave`) | Latest APT | Digital VCD waveform viewer |
+| **Yosys** (`yosys`) | Latest APT | RTL Synthesis & logic optimization |
+| **KLayout** (`klayout`) | Latest APT / .deb | GDS II layout viewer & DRC editor |
+| **Ngspice** (`ngspice`) | Latest (git build) | SPICE analog & digital co-simulator |
+| **Magic VLSI** (`magic`) | Latest (git build) | IC layout editor, DRC & extraction |
+| **Netgen** (`netgen`) | Latest (git build) | Layout vs Schematic (LVS) checker |
+| **Xschem** (`xschem`) | Latest (git build) | Schematic capture (defaults + SKY130) |
+| **OpenLane 2** (`openlane`) | Latest GitHub (`efabless`) | Automated RTL-to-GDS II flow |
+| **Logisim Evolution** (`logisim`) | 3.9.0 | Educational digital logic GUI |
+| **SKY130A PDK** | SkyWater 130nm | Via `volare` (pre-configured) |
+| **xterm** (`xterm`) | Latest APT | Xschem interactive SPICE console |
+| **Verilator** (`verilator`) | Latest APT | Verilog linter & fast simulator |
 
 ### 🆕 OpenLane 2 — always the latest from GitHub
 
