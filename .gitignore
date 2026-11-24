@@ -6,6 +6,10 @@ vlsi_install.log
 runs/
 examples/**/runs/
 
+# Generated synthesis netlists and schematics
+*_synth.v
+*_schematic.*
+
 # OS
 .DS_Store
 Thumbs.db
