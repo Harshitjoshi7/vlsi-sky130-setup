@@ -84,6 +84,7 @@ sudo apt install -y \
   fonts-urw-base35 \
   csh tcsh \
   gedit \
+  xterm \
   verilator
 
 # Ensure docker group permissions
