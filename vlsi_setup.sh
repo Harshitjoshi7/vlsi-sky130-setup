@@ -394,6 +394,15 @@ set terminal {xterm -geometry 100x35 -bg black -fg white -fn 9x15}
 if {![info exists env(PDK_PATH)]} {
     set env(PDK_PATH) "$env(HOME)/pdk/sky130A"
 }
+if {![info exists env(PDK_ROOT)]} {
+    set env(PDK_ROOT) "$env(HOME)/pdk"
+}
+
+# SkyWater 130 variables (Required by corner.sym and stdcells)
+set SKYWATER_MODELS "$env(PDK_PATH)/libs.tech/ngspice"
+set ::SKYWATER_MODELS "$env(PDK_PATH)/libs.tech/ngspice"
+set SKYWATER_STDCELLS "$env(PDK_PATH)/libs.ref/sky130_fd_sc_hd/spice"
+set ::SKYWATER_STDCELLS "$env(PDK_PATH)/libs.ref/sky130_fd_sc_hd/spice"
 
 # Build library search path: Default devices FIRST, then SKY130 PDK
 set XSCHEM_LIBRARY_PATH [list]
